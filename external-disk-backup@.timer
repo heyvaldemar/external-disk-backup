@@ -1,0 +1,12 @@
+[Unit]
+Description=Daily backup of %i to the removable disk
+
+[Timer]
+OnCalendar=*-*-* 12:00:00
+RandomizedDelaySec=15m
+# Runs when the machine comes back rather than waiting for tomorrow: the disk
+# being unplugged overnight is the normal case, not an exception.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

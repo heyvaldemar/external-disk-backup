@@ -1,0 +1,13 @@
+[Unit]
+Description=Back %i up to the removable disk
+Documentation=https://github.com/heyvaldemar/external-disk-backup
+RequiresMountsFor=/mnt/backup
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/external-disk-backup/%i.env
+ExecStart=/usr/local/sbin/external-disk-backup.sh
+# Generous, because a first run over a large source is slow, but bounded:
+# a copy wedged on a disconnecting USB disk should fail the unit rather than
+# sit in "activating" until somebody notices the backups stopped.
+TimeoutStartSec=6h

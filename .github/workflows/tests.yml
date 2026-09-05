@@ -1,0 +1,44 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '0 5 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint the shell and the units
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - name: ShellCheck
+        # Pinned, and the same image a maintainer runs locally: Ubuntu's
+        # packaged shellcheck is a different version with different defaults,
+        # and a tree that lints clean on a laptop failing here teaches nothing.
+        run: |
+          docker run --rm -v "$PWD:/mnt" -w /mnt koalaman/shellcheck:v0.11.0 \
+            external-disk-backup.sh tests/e2e-external-disk-backup.sh
+      - name: The timer's schedule is real
+        run: |
+          systemd-analyze calendar --iterations=3 \
+            "$(grep -oP '(?<=^OnCalendar=).*' external-disk-backup@.timer)"
+
+  scenarios:
+    name: Twelve scenarios, mostly refusals
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - name: Run the end-to-end suite
+        # GNU rsync, which is the point: the suite includes a run against a
+        # deliberately crippled rsync, so the probe that refuses one is itself
+        # shown a real violation rather than assumed to work.
+        run: |
+          rsync --version | head -1
+          chmod +x tests/e2e-external-disk-backup.sh
+          ./tests/e2e-external-disk-backup.sh
