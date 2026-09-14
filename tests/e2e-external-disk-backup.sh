@@ -147,6 +147,114 @@ else
   printf '%s\n' "$out" | sed 's/^/        /' | tail -4
 fi
 
+
+# --- the verification, and the four answers it has to tell apart -----------
+#
+# A copy that is not compared against the source is a hypothesis. The
+# interesting part is not finding differences, it is classifying them: "missing
+# from the copy" means one thing for a file that predates the last successful
+# backup and something else entirely for one that arrived after it. The origin
+# machine got this wrong in both directions — first treating every absence as
+# explained (a 221-line report that was a race between the 12:00 copy and the
+# 13:00 check), then, with the stamp missing, treating every difference as
+# corruption.
+echo
+echo "the verification"
+V="$WORK/v"
+vrun() {
+  BACKUP_TARGET="$V/target" BACKUP_SOURCES="$V/src" BACKUP_STATE_DIR="$V/state" \
+  bash "$SCRIPT" "${1:-}" 2>&1
+}
+fresh_v() {
+  rm -rf "$V"; mkdir -p "$V/src/photos" "$V/target" "$V/state"
+  echo one > "$V/src/photos/one.txt"; echo two > "$V/src/photos/two.txt"
+  # Dated well before the backup, because that is what a real source looks
+  # like and it is what the classification turns on. Left at "now" they land
+  # in the same second as the cutoff, which is the boundary case rather than
+  # the ordinary one — it gets its own scenario below.
+  find "$V/src" -type f -exec touch -t 202601010000 {} +
+  touch "$V/target/.backup-target"
+  vrun >/dev/null 2>&1
+}
+
+fresh_v
+out="$(vrun --verify)"; rc=$?
+if [ $rc -eq 0 ] && printf '%s' "$out" | grep -q "VERIFY OK"; then
+  pass "a copy that matches its source verifies clean"
+else
+  fail "a matching copy did not verify"; printf '%s\n' "$out" | sed 's/^/        /' | tail -5
+fi
+
+# A file the backup missed: it predates the last successful run and is not on
+# the disk. This is the case the whole classification exists for.
+fresh_v
+rm -f "$V/target/src/photos/one.txt" "$V/target/photos/one.txt" 2>/dev/null
+find "$V/target" -name one.txt -delete 2>/dev/null
+out="$(vrun --verify)"; rc=$?
+if [ $rc -ne 0 ] && printf '%s' "$out" | grep -q "MISSED"; then
+  pass "a file older than the last backup and absent from the copy is a finding"
+else
+  fail "a missed file was not reported"; printf '%s\n' "$out" | sed 's/^/        /' | tail -5
+fi
+
+# The same absence, for a file that arrived AFTER the last successful run.
+# Nothing is wrong: the next backup will take it. This is deliberately the
+# boundary case — the file is created in the same second the backup stamped —
+# because that is where the comparison has to choose, and it chooses silence.
+fresh_v
+echo three > "$V/src/photos/three.txt"
+out="$(vrun --verify)"; rc=$?
+if [ $rc -eq 0 ] && printf '%s' "$out" | grep -q "VERIFY OK" && ! printf '%s' "$out" | grep -q "MISSED"; then
+  pass "a file that arrived after the last backup is not a finding"
+else
+  fail "a newly added file was reported as missed"; printf '%s\n' "$out" | sed 's/^/        /' | tail -5
+fi
+
+# Content that differs, on a file older than the cutoff: nothing explains that.
+fresh_v
+find "$V/target" -name two.txt -exec sh -c 'echo corrupted > "$1"' _ {} \;
+out="$(vrun --verify)"; rc=$?
+if [ $rc -ne 0 ] && printf '%s' "$out" | grep -q "UNEXPLAINED"; then
+  pass "a file older than the last backup whose copy differs is a finding"
+else
+  fail "a differing copy was not reported"; printf '%s\n' "$out" | sed 's/^/        /' | tail -5
+fi
+
+# AND WITHOUT THE CUTOFF, NOTHING IS EVIDENCE. Delete the stamp and the same
+# broken copy must produce no findings and say why — not because it is clean,
+# but because there is no time to judge it against. The origin machine had this
+# inverted: one missing stamp and a continuously-written log would have been
+# reported as disk corruption.
+find "$V/target" -name two.txt -exec sh -c 'echo corrupted > "$1"' _ {} \;
+rm -f "$V/state/last-ok"
+out="$(vrun --verify)"; rc=$?
+if [ $rc -eq 0 ] && printf '%s' "$out" | grep -q "VERIFY INCONCLUSIVE" && ! printf '%s' "$out" | grep -q "UNEXPLAINED"; then
+  pass "with no successful backup recorded, nothing is called a finding and the run says so"
+else
+  fail "a missing cutoff produced verdicts it had no basis for"; printf '%s\n' "$out" | sed 's/^/        /' | tail -5
+fi
+
+# A source that is configured and has never reached the disk at all.
+fresh_v
+mkdir -p "$V/src2"; echo x > "$V/src2/x.txt"
+out="$(BACKUP_TARGET="$V/target" BACKUP_SOURCES="$V/src $V/src2" BACKUP_STATE_DIR="$V/state" bash "$SCRIPT" --verify 2>&1)"; rc=$?
+if [ $rc -ne 0 ] && printf '%s' "$out" | grep -q "there is no .* on the disk at all"; then
+  pass "a configured source with no copy at all is a finding, not a skipped line"
+else
+  fail "a source that was never copied went unmentioned"; printf '%s\n' "$out" | sed 's/^/        /' | tail -5
+fi
+
+# A read-only pass must not move the stamp a watcher reads to decide whether
+# the backup is still running.
+fresh_v
+before="$(cat "$V/state/last-run")"
+vrun --verify >/dev/null 2>&1
+if [ "$(cat "$V/state/last-run")" = "$before" ]; then
+  pass "a verification does not claim the backup ran"
+else
+  fail "the verification moved the last-run stamp"
+fi
+
 echo
 echo "passed: $PASSED   failed: $FAILED"
 [ "$FAILED" -eq 0 ]

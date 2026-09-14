@@ -5,6 +5,22 @@
 
 Copy what matters to a removable disk, in a way that cannot quietly do the wrong thing.
 
+## A copy nobody compared is a hypothesis
+
+`--verify` walks the same `BACKUP_SOURCES` the copy walks and asks rsync what differs. The comparison is not the interesting part; classifying what it finds is.
+
+"Missing from the copy" is two different facts. A file older than the last successful backup and absent from the disk is a file the backup **missed**, which is the whole reason to look. A file newer than it simply arrived since, and reporting it is noise. On the machine these rules come from, the first version treated every absence as explained, and the 221-line report it produced turned out to be a race between the 12:00 copy and the 13:00 check — every one of those files was on the disk and identical.
+
+**Without the cutoff, nothing is evidence.** If no successful backup has been recorded, differences are listed and none of them is called a finding, because there is no time to judge them against. The origin machine had this inverted: one missing stamp and a continuously-written log would have been reported as disk corruption.
+
+At the boundary it errs towards silence. The stamp has one-second resolution, so a file written in the same second the backup finished could be either; counted as new, a genuinely missed file is excused for one run and caught by the next, when the cutoff has moved past it.
+
+```bash
+external-disk-backup.sh --verify    # compares, copies nothing, moves no stamp
+```
+
+The default compare is size and mtime, the same question the copy itself asks. `BACKUP_VERIFY_CHECKSUM=1` reads every byte on both sides instead — on the machine this comes from that is 1.3 TB and four hours, and a verification nobody can afford to run is a verification that does not run.
+
 ## The three ways rsync in a timer goes wrong, all of them silently
 
 **The disk is not there.** An unmounted mount point is an ordinary empty directory on the root filesystem. A plain rsync will happily write a hundred gigabytes into it, filling the disk it was protecting you against, and report success. So the target has to prove it is the target: a marker file that lives physically on the removable disk. There is no other way for that file to be missing, so its absence means one thing.
