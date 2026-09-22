@@ -197,6 +197,33 @@ else
   fail "a missed file was not reported"; printf '%s\n' "$out" | sed 's/^/        /' | tail -5
 fi
 
+# AN EXCLUSION THE COPY HONOURS AND THE VERIFICATION DOES NOT is a report of
+# thousands of findings, every one of them the setting working. Taking a media
+# library's artwork and database while leaving the video behind is the case
+# people actually want out of BACKUP_RSYNC_EXTRA, and it was unusable until
+# both halves agreed.
+rm -rf "$V"; mkdir -p "$V/src/media" "$V/target" "$V/state"
+echo art > "$V/src/media/cover.jpg"
+echo film > "$V/src/media/movie.mkv"
+find "$V/src" -type f -exec touch -t 202601010000 {} +
+touch "$V/target/.backup-target"
+xrun() {
+  BACKUP_TARGET="$V/target" BACKUP_SOURCES="$V/src" BACKUP_STATE_DIR="$V/state" \
+  BACKUP_RSYNC_EXTRA="--exclude=*.mkv" bash "$SCRIPT" "${1:-}" 2>&1
+}
+xrun >/dev/null 2>&1
+if find "$V/target" -name 'cover.jpg' | grep -q . && ! find "$V/target" -name 'movie.mkv' | grep -q .; then
+  pass "an exclusion keeps the video out of the copy"
+else
+  fail "the exclusion did not take"
+fi
+out="$(xrun --verify)"; rc=$?
+if [ $rc -eq 0 ] && ! printf '%s' "$out" | grep -q "movie.mkv"; then
+  pass "and the verification does not call the excluded file missing"
+else
+  fail "the excluded file was reported as missing"; printf '%s\n' "$out" | sed 's/^/        /' | tail -5
+fi
+
 # The same absence, for a file that arrived AFTER the last successful run.
 # Nothing is wrong: the next backup will take it. This is deliberately the
 # boundary case — the file is created in the same second the backup stamped —

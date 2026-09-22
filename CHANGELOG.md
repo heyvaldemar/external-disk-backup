@@ -7,7 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-_(no unreleased changes yet)_
+### Fixed
+
+- **`--verify` honours `BACKUP_RSYNC_EXTRA`, so an exclusion stops reporting itself.** The copy skipped what the setting told it to skip and the verification then called every one of those files missing from the backup. Excluding a media library's video while keeping its artwork, playlists and database — the case the setting exists for — produced a report of thousands of findings, all of them the setting working. Both halves now use the same list, and the suite holds them to it: the video stays out of the copy, and the verification does not mention it.
 
 ## [1.1.0] - 2026-09-14
 

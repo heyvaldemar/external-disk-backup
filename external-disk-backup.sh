@@ -162,6 +162,7 @@ if [ "$VERIFY_ONLY" = true ]; then
     # wrong. --checksum is opt-in: on the machine this comes from a checksum
     # pass over 1.3 TB took four hours, and a verification nobody can afford to
     # run is a verification that does not run.
+    # shellcheck disable=SC2086  # RSYNC_EXTRA is a word list on purpose
     while IFS= read -r line; do
       [ -n "$line" ] || continue
       flags="${line%% *}"; rel="${line#* }"
@@ -193,7 +194,15 @@ if [ "$VERIFY_ONLY" = true ]; then
         say "  UNEXPLAINED: $name/$rel is older than the last successful backup and differs from the copy"
         unexplained=$((unexplained+1))
       fi
-    done < <(rsync -rn --itemize-changes ${VERIFY_CHECKSUM:+--checksum} --exclude=_trash "$src/" "$dest/" 2>/dev/null | sed -e "s/^\\([^ ]*\\) /\\1 /")
+    # THE SAME EXCLUSIONS THE COPY USED, or this reports the excluded files as
+    # missing — every one of them, on every run.
+    #
+    # BACKUP_RSYNC_EXTRA is how somebody takes a library's artwork, playlists
+    # and database while leaving the video behind, which is the case people
+    # actually want. Without this line the copy skips the video on purpose and
+    # the verification then says the video is missing from the backup: a
+    # report of thousands of findings, all of them the setting working.
+    done < <(rsync -rn --itemize-changes ${VERIFY_CHECKSUM:+--checksum} --exclude=_trash $RSYNC_EXTRA "$src/" "$dest/" 2>/dev/null | sed -e "s/^\\([^ ]*\\) /\\1 /")
   done
 
   say "verified ${#sources[@]} sources: $checked differences examined, $since explained by arriving after the last backup, $missed missing, $unexplained unexplained"
