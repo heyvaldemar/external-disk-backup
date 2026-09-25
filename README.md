@@ -1,6 +1,7 @@
 # External disk backup
 
 [![Tests](https://github.com/heyvaldemar/external-disk-backup/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/heyvaldemar/external-disk-backup/actions/workflows/tests.yml)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/14901/badge)](https://www.bestpractices.dev/projects/14901)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Copy what matters to a removable disk, in a way that cannot quietly do the wrong thing.
